@@ -1,17 +1,17 @@
-class SessionUploadTask: NSURLSessionUploadTask {
+class SessionUploadTask: URLSessionUploadTask {
 
     // MARK: - Types
 
-    typealias Completion = (NSData?, NSURLResponse?, NSError?) -> Void
+    typealias Completion = (Data?, Foundation.URLResponse?, NSError?) -> Void
 
     // MARK: - Properties
 
     weak var session: Session!
-    let request: NSURLRequest
+    let request: URLRequest
     let completion: Completion?
     var dataTask: SessionDataTask!
 
-    override var response: NSURLResponse? {
+    override var response: Foundation.URLResponse? {
         return dataTask.interaction?.response
     }
 
@@ -21,7 +21,7 @@ class SessionUploadTask: NSURLSessionUploadTask {
 
     // MARK: - Initializers
 
-    init(session: Session, request: NSURLRequest, completion: Completion? = nil) {
+    init(session: Session, request: URLRequest, completion: Completion? = nil) {
         self.session = session
         self.request = request
         self.completion = completion

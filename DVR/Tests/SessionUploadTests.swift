@@ -3,102 +3,102 @@ import XCTest
 
 class SessionUploadTests: XCTestCase {
 
-    lazy var request: NSURLRequest = {
-        let request = NSMutableURLRequest(URL: NSURL(string: "https://httpbin.org/post")!)
-        request.HTTPMethod = "POST"
+    lazy var request: URLRequest = {
+        let request = NSMutableURLRequest(url: URL(string: "https://httpbin.org/post")!)
+        request.httpMethod = "POST"
 
         let contentType = "multipart/form-data; boundary=\(self.multipartBoundary)"
         request.addValue(contentType, forHTTPHeaderField: "Content-Type")
-        return request
+        return request as URLRequest
     }()
     let multipartBoundary = "---------------------------3klfenalksjflkjoi9auf89eshajsnl3kjnwal".UTF8Data()
-    lazy var testFile: NSURL = {
-        return NSBundle(forClass: self.dynamicType).URLForResource("testfile", withExtension: "txt")!
+    lazy var testFile: URL = {
+        return Bundle(for: type(of: self)).url(forResource: "testfile", withExtension: "txt")!
     }()
 
     func testUploadFile() {
         let session = Session(cassetteName: "upload-file")
         session.recordingEnabled = false
-        let expectation = expectationWithDescription("Network")
+        let expectation = self.expectation(description: "Network")
 
-        let data = encodeMultipartBody(NSData(contentsOfURL: testFile)!, parameters: [:])
+        let data = encodeMultipartBody(try! Data(contentsOf: testFile), parameters: [:])
         let file = writeDataToFile(data, fileName: "upload-file")
 
-        session.uploadTaskWithRequest(request, fromFile: file) { data, response, error in
+        session.uploadTask(with: request, fromFile: file, completionHandler: { data, response, error in
             do {
-                let JSON = try NSJSONSerialization.JSONObjectWithData(data!, options: []) as? [String: AnyObject]
+                let JSON = try JSONSerialization.jsonObject(with: data!, options: []) as? [String: AnyObject]
                 XCTAssertEqual("test file\n", (JSON?["form"] as? [String: AnyObject])?["file"] as? String)
             } catch {
                 XCTFail("Failed to read JSON.")
             }
 
-            let HTTPResponse = response as! NSHTTPURLResponse
+            let HTTPResponse = response as! HTTPURLResponse
             XCTAssertEqual(200, HTTPResponse.statusCode)
 
             expectation.fulfill()
-        }.resume()
+        }) .resume()
 
-        waitForExpectationsWithTimeout(4, handler: nil)
+        waitForExpectations(timeout: 4, handler: nil)
     }
 
     func testUploadData() {
         let session = Session(cassetteName: "upload-data")
-        session.recordingEnabled = false
-        let expectation = expectationWithDescription("Network")
+        session.recordingEnabled = true
+        let expectation = self.expectation(description: "Network")
 
-        let data = encodeMultipartBody(NSData(contentsOfURL: testFile)!, parameters: [:])
+        let data = encodeMultipartBody(try! Data(contentsOf: testFile), parameters: [:])
 
-        session.uploadTaskWithRequest(request, fromData: data) { data, response, error in
+        session.uploadTask(with: request, from: data, completionHandler: { data, response, error in
             do {
-                let JSON = try NSJSONSerialization.JSONObjectWithData(data!, options: []) as? [String: AnyObject]
+                let JSON = try JSONSerialization.jsonObject(with: data!, options: []) as? [String: AnyObject]
                 XCTAssertEqual("test file\n", (JSON?["form"] as? [String: AnyObject])?["file"] as? String)
             } catch {
                 XCTFail("Failed to read JSON.")
             }
 
-            let HTTPResponse = response as! NSHTTPURLResponse
+            let HTTPResponse = response as! HTTPURLResponse
             XCTAssertEqual(200, HTTPResponse.statusCode)
 
             expectation.fulfill()
-        }.resume()
+        }) .resume()
 
-        waitForExpectationsWithTimeout(4, handler: nil)
+        waitForExpectations(timeout: 4, handler: nil)
     }
 
     func testUploadDelegate() {
-        class Delegate: NSObject, NSURLSessionDataDelegate {
-            var task: NSURLSessionTask?
+        class Delegate: NSObject, URLSessionDataDelegate {
+            var task: URLSessionTask?
             let expectation: XCTestExpectation
 
             init(expectation: XCTestExpectation) {
                 self.expectation = expectation
             }
 
-            @objc func URLSession(session: NSURLSession, dataTask: NSURLSessionDataTask, didReceiveData data: NSData) {
+            @objc func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
                 task = dataTask
                 expectation.fulfill()
             }
         }
 
-        let expectation = expectationWithDescription("didCompleteWithError")
+        let expectation = self.expectation(description: "didCompleteWithError")
         let delegate = Delegate(expectation: expectation)
-        let config = NSURLSessionConfiguration.defaultSessionConfiguration()
-        let backingSession = NSURLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+        let config = URLSessionConfiguration.default
+        let backingSession = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
         let session = Session(cassetteName: "upload-data", backingSession: backingSession)
         session.recordingEnabled = false
 
-        let data = encodeMultipartBody(NSData(contentsOfURL: testFile)!, parameters: [:])
+        let data = encodeMultipartBody(try! Data(contentsOf: testFile), parameters: [:])
 
-        let task = session.uploadTaskWithRequest(request, fromData: data)
+        let task = session.uploadTask(with: request, from: data)
         task.resume()
 
-        waitForExpectationsWithTimeout(1, handler: nil)
+        waitForExpectations(timeout: 1, handler: nil)
         XCTAssertEqual(task, delegate.task)
     }
 
     // MARK: Helpers
 
-    func encodeMultipartBody(data: NSData, parameters: [String: AnyObject]) -> NSData {
+    func encodeMultipartBody(_ data: Data, parameters: [String: AnyObject]) -> Data {
         let delim = "--\(multipartBoundary)\r\n".UTF8Data()
 
         let body = NSMutableData()
@@ -112,19 +112,16 @@ class SessionUploadTests: XCTestCase {
         body += data
         body += "\r\n--\(multipartBoundary)--\r\n".UTF8Data()
 
-        return body
+        return body as Data
     }
 
-    func writeDataToFile(data: NSData, fileName: String) -> NSURL {
-        let documentsPath = NSSearchPathForDirectoriesInDomains(.DocumentDirectory, .UserDomainMask, true)[0]
-        let documentsURL = NSURL(fileURLWithPath: documentsPath, isDirectory: true)
+    func writeDataToFile(_ data: Data, fileName: String) -> URL {
+        let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
+        let documentsURL = URL(fileURLWithPath: documentsPath, isDirectory: true)
 
-        guard let url = documentsURL.URLByAppendingPathComponent(fileName + ".tmp") else {
-            XCTFail("Failed to write to file")
-            fatalError()
-        }
+        let url = documentsURL.appendingPathComponent(fileName + ".tmp")
 
-        data.writeToURL(url, atomically: true)
+        try? data.write(to: url, options: [.atomic])
         return url
     }
 
@@ -133,12 +130,12 @@ class SessionUploadTests: XCTestCase {
 // MARK: - Helpers
 
 extension String {
-    func UTF8Data() -> NSData {
-        return dataUsingEncoding(NSUTF8StringEncoding)!
+    func UTF8Data() -> Data {
+        return data(using: String.Encoding.utf8)!
     }
 }
 
 
-public func +=(lhs: NSMutableData, rhs: NSData) {
-    lhs.appendData(rhs)
+public func +=(lhs: NSMutableData, rhs: Data) {
+    lhs.append(rhs)
 }
